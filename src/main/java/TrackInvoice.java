@@ -4,6 +4,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import javax.swing.*;
 import java.io.*;
 import java.util.ArrayList;
 
@@ -32,5 +33,59 @@ public class TrackInvoice {
         workbook.write(fileOutputStream);
         fileOutputStream.close();
         workbook.close();
+    }
+    public void checkStatus(String pathSave, JTextArea consoleOutput) throws IOException {
+        String pathCountInvoices = pathSave + "\\" + "countInvoices.txt";
+        String pathCountSentEmails = pathSave + "\\" + "countSentEmails.txt";
+        pathTrack = pathSave + "\\" + "trackMail.xlsx";
+        FileReader reader = null;
+        int countInvoices = 0;
+        int countEmails = 0;
+
+        try {
+            reader = new FileReader(pathCountInvoices);
+        } catch (Exception e){
+            consoleOutput.append("Please choose the correct directory.\n");
+        }
+
+        BufferedReader brInvoices = new BufferedReader(reader);
+        try {
+            String line = brInvoices.readLine();
+            countInvoices = Integer.valueOf(line);
+        } finally {
+            brInvoices.close();
+        }
+
+        BufferedReader brEmails = new BufferedReader(new FileReader(pathCountSentEmails));
+        try {
+            String line = brEmails.readLine();
+            countEmails = Integer.valueOf(line);
+        } finally {
+            brEmails.close();
+        }
+
+        int missingEmails = countInvoices - countEmails;
+
+        if (missingEmails > 0) {
+            //load Excel
+            InputStream input = new FileInputStream(pathTrack);
+            XSSFWorkbook workbook = new XSSFWorkbook(input);
+            XSSFSheet sheet = workbook.getSheetAt(0);
+
+            for (int i = 0; i < sheet.getPhysicalNumberOfRows(); i++) {
+                Row r = sheet.getRow(i);
+                String filePath = r.getCell(2).getStringCellValue();
+                if (r.getCell(1) == null) {
+                    consoleOutput.append(filePath + " has no email and not yet sent.\n");
+                } else if (r.getCell(4) == null) {
+                    consoleOutput.append(filePath + " has not yet sent.\n");
+                }
+            }
+            workbook.close();
+        }
+        consoleOutput.append("There are " + countInvoices + " invoices created in total.\n");
+        consoleOutput.append("There are " + countEmails + " invoices sent in total.\n");
+        consoleOutput.append("Missing " + missingEmails + " emails.\n");
+        consoleOutput.append("If you want to send emails, click the \"Send emails to buyers\" button or check the existence of their emails.\n");
     }
 }

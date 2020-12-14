@@ -27,6 +27,7 @@ public class OutlookEmail {
     private String subject;
     private String bodyMessage;
     private String pathTrack;
+    private String pathSave;
     private JTextArea textArea;
     private int count = 0;
     public OutlookEmail(String id, String pw, JTextArea textArea) {
@@ -69,7 +70,45 @@ public class OutlookEmail {
         return count;
     }
 
+    public void updateCount() {
+        File fileToBeModified = new File(pathSave + "\\" + "countSentEmails.txt");
+        String oldContent = "";
+        BufferedReader reader = null;
+        FileWriter writer = null;
+        int newCount = 0;
+        try
+        {
+            reader = new BufferedReader(new FileReader(fileToBeModified));
+            //Reading all the lines of input text file into oldContent
+            oldContent = reader.readLine();
+            System.out.println(oldContent);
+            int oldCount = Integer.valueOf(oldContent);
+            newCount = oldCount + count;
+            //Replacing oldString with newString in the oldContent
+            String newContent = Integer.toString(newCount);
+            //Rewriting the input text file with newContent
+            writer = new FileWriter(fileToBeModified);
+            writer.write(newContent);
+            count = 0;
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try
+            {
+                //Closing the resources
+                reader.close();
+                writer.close();
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public void sendEmail(String pathSave) throws IOException, BiffException {
+        this.pathSave = pathSave;
         this.pathTrack = pathSave + "\\" + "trackMail.xlsx";
         //obtaining input bytes from a file
         FileInputStream input = new FileInputStream(new File(pathTrack));
@@ -81,14 +120,13 @@ public class OutlookEmail {
             Row row = sheet.getRow(i);
             if (row.getCell(0) == null) {
                 break;
-            } else if (row.getCell(4) != null) {
+            } else if (row.getCell(4) != null || row.getCell(1) == null) {
                 continue;
             }
             String po = row.getCell(0).getStringCellValue();
             String email = row.getCell(1).getStringCellValue();
             String filePath = row.getCell(2).getStringCellValue();
             String fileName = row.getCell(3).getStringCellValue();
-            System.out.println(po + " " + email + " " + filePath + " " + fileName);
             try {
                 if (email.equals(" ")) {
                     throw new Exception();
@@ -96,6 +134,7 @@ public class OutlookEmail {
                 sendToBuyer(email, filePath, fileName);
                 Cell cellSent = row.createCell(4);
                 cellSent.setCellValue("Yes");
+                System.out.println(po + " " + email + " " + filePath + " " + fileName);
                 count++;
             } catch (Exception e) {
                 textArea.append(po + " " + "has no email of the buyer.\n");

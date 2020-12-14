@@ -37,6 +37,43 @@ public class CreateInvoice {
         return count;
     }
 
+    public void updateCount() {
+        File fileToBeModified = new File(pathSave + "\\" + "countInvoices.txt");
+        String oldContent = "";
+        BufferedReader reader = null;
+        FileWriter writer = null;
+        int newCount = 0;
+        try
+        {
+            reader = new BufferedReader(new FileReader(fileToBeModified));
+            //Reading all the lines of input text file into oldContent
+            oldContent = reader.readLine();
+            System.out.println(oldContent);
+            int oldCount = Integer.valueOf(oldContent);
+            newCount = oldCount + count;
+            //Replacing oldString with newString in the oldContent
+            String newContent = Integer.toString(newCount);
+            //Rewriting the input text file with newContent
+            writer = new FileWriter(fileToBeModified);
+            writer.write(newContent);
+            count = 0;
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try
+            {
+                //Closing the resources
+                reader.close();
+                writer.close();
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public CreateInvoice(String pathData, String pathSave, String id, String pw) {
         this.pathData = pathData;
         this.pathSave = pathSave;
@@ -61,7 +98,13 @@ public class CreateInvoice {
 
         WorkbookSettings workbookSettings = new WorkbookSettings();
         workbookSettings.setEncoding("Cp1252"); //Recognize special character
-        Workbook data = Workbook.getWorkbook(new File(this.pathData), workbookSettings);
+
+        Workbook data = null;
+        try {
+            data = Workbook.getWorkbook(new File(this.pathData), workbookSettings);
+        } catch (Exception e) {
+            textArea.append("Please select the data file.\n");
+        }
         storeDataInHashMap(data);
 
         for (Map.Entry<String, ArrayList<Integer>> entry : poAndRows.entrySet()) {
@@ -109,8 +152,8 @@ public class CreateInvoice {
             String email = "";
             String pathPDF = pathSave + "\\" + date + "\\" + po + ".pdf";
 
-            textArea.append(poNumber + "\n");
-            textArea.append(pathPDF + "\n");
+            //Console output
+            textArea.append("Created " + pathPDF + "\n");
             poList.add(poNumber);
             emailList.add(email);
             pathFileList.add(pathPDF);

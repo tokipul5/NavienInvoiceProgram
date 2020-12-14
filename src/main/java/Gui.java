@@ -45,7 +45,6 @@ public class Gui {
         f.getContentPane().add(scrollConsole);
         f.setLayout(null);
         f.setVisible(true);
-        consoleOutput.append("testing\n");
 
         JLabel id = new JLabel("Outlook ID");
         id.setBounds(20, 20, 100, 20);
@@ -140,9 +139,9 @@ public class Gui {
         f.add(browseDirectory);
         // ------------------------------------------------------------------
 
-        JButton b=new JButton("Create and send invoices");//creating instance of JButton
-        b.setBounds(20,210,200, 40);//x axis, y axis, width, height
-        b.addActionListener(new ActionListener(){
+        JButton buttonCreateInvoices=new JButton("Create invoices in word and pdf file");//creating instance of JButton
+        buttonCreateInvoices.setBounds(20,210,340, 40);//x axis, y axis, width, height
+        buttonCreateInvoices.addActionListener(new ActionListener(){
             public void actionPerformed(ActionEvent e){
                 String strId = textId.getText();
                 String strPassword = String.valueOf(textPassword.getPassword());
@@ -170,24 +169,88 @@ public class Gui {
                 createInvoice = new CreateInvoice(dataPath, savePath, id, pw);
                 createInvoice.generateInvoice(consoleOutput);
 
+                //Result
+                consoleOutput.append("Created " + createInvoice.getCount() + " invoices.\n");
+                createInvoice.updateCount();
+
+                long elapsedTime = System.currentTimeMillis() - start;
+                System.out.print(elapsedTime/(60*1000F));
+                System.out.println(" mins");
+                consoleOutput.append("It took " + elapsedTime/(60*1000F) + " mins to create invoices.\n\n\n");
+            }
+        });
+        f.add(buttonCreateInvoices);//create and send invoice button
+
+        JButton buttonSendEmails=new JButton("Send emails to buyers");//creating instance of JButton
+        buttonSendEmails.setBounds(20,260,340, 40);//x axis, y axis, width, height
+        buttonSendEmails.addActionListener(new ActionListener(){
+            public void actionPerformed(ActionEvent e){
+                String strId = textId.getText();
+                String strPassword = String.valueOf(textPassword.getPassword());
+                String dataPath = dataFile.getText();
+                String savePath = directory.getText();
+                String strSubject = subject.getText();
+                String strBodyMessage = message.getText();
+                try {
+                    runProgram(dataPath, savePath, strId, strPassword, strSubject, strBodyMessage);
+                } catch (BiffException biffException) {
+                    biffException.printStackTrace();
+                } catch (IOException ioException) {
+                    ioException.printStackTrace();
+                } catch (WriteException writeException) {
+                    writeException.printStackTrace();
+                } catch (XmlException xmlException) {
+                    xmlException.printStackTrace();
+                }
+            }
+
+            public void runProgram(String dataPath, String savePath, String id, String pw, String subject, String message) throws BiffException, IOException, WriteException, XmlException {
+                long start = System.currentTimeMillis();
                 //Send emails
                 System.out.println("Email");
+                if (email == null) {
+                    consoleOutput.append("Please login.\n");
+                }
                 email.setSubject(subject);
                 email.setBodyMessage(message);
                 email.sendEmail(savePath);
 
                 //Result
-                consoleOutput.append("Created " + createInvoice.getCount() + " invoices.\n");
                 consoleOutput.append("Sent " + email.getCount() + " emails.\n");
+                email.updateCount();
 
                 long elapsedTime = System.currentTimeMillis() - start;
-                System.out.print(elapsedTime/(60*1000F));
-                System.out.println(" mins");
-                consoleOutput.append(elapsedTime/(60*1000F) + " mins.");
+                System.out.println("It took " + elapsedTime/(60*1000F) + " mins");
+                System.out.println();
+                consoleOutput.append("It took " + elapsedTime/(60*1000F) + " mins to send emails.\n\n\n");
             }
         });
-        f.add(b);//create and send invoice button
+        f.add(buttonSendEmails);//create and send invoice button
 
+        JButton buttonCheckStatus=new JButton("Check status of invoices and emails");//creating instance of JButton
+        buttonCheckStatus.setBounds(20,310,340, 40);//x axis, y axis, width, height
+        buttonCheckStatus.addActionListener(new ActionListener(){
+            public void actionPerformed(ActionEvent e){
+                try {
+                    String savePath = directory.getText();
+                    runProgram(savePath);
+                } catch (BiffException biffException) {
+                    biffException.printStackTrace();
+                } catch (IOException ioException) {
+                    ioException.printStackTrace();
+                } catch (WriteException writeException) {
+                    writeException.printStackTrace();
+                } catch (XmlException xmlException) {
+                    xmlException.printStackTrace();
+                }
+            }
+
+            public void runProgram(String savePath) throws BiffException, IOException, WriteException, XmlException {
+                TrackInvoice trackEmail = new TrackInvoice();
+                trackEmail.checkStatus(savePath, consoleOutput);
+            }
+        });
+        f.add(buttonCheckStatus);//create and send invoice button
 
         //Set size and format of JFrame.
         f.setSize(1000,700);//400 width and 500 height
