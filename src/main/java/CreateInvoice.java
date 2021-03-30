@@ -1,5 +1,6 @@
 import java.io.*;
 import java.nio.file.Paths;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -24,19 +25,147 @@ public class CreateInvoice {
     private String pathData;
     private String pathSave;
     private String pathTemplate = "Invoice-Template.docx";
+    private String name;
     private int count = 0;
     private static HashMap<String, ArrayList<Integer>> poAndRows;
     private static HashMap<String, String> poAndDate;
-    private static String[] colName = {"C", "E", "G", "H", "M", "Amount", "Q"};
-    private static int[] colIndex = {4, 0, 16, 2, 6, 7, 12};
-    //4: Qty, 0: Order type Desc. (But it should be ITEM NO which does not exist in excel file),
-    //16: C/M Desc (old item no), 2: Material Desc, 6: order price, 7: order amount, 12: cur
-    private OutlookEmail email;
+    private static HashMap<String, String> poAndCustomer;
+    private static String[] titleName = {"Billing Doc.", "Sold-to", "Ship-to", "PO NO.", "Payment terms", "Sales Rep" +
+            "(Doc)", "Tracking No", "Carrier Name", "Billing Date", "Per Name"}; // 0-9
+    private static int[] titleIndex;
+    private static String[] detailName = {"Billing Qty", "Material", "Tax code", "Material", "Unit Price", "Total " +
+            "amount", "Currency"};
+    private static int[] detailIndex;
+    private static HashMap<String, ArrayList<String>> customerAndPo;
+
+    /*
+    Constructor
+     */
+    public CreateInvoice(String pathData, String pathSave, String name) {
+        this.pathData = pathData;
+        this.pathSave = pathSave;
+        this.name = name;
+        poAndRows = new HashMap<>();
+        poAndDate = new HashMap<>();
+        poAndCustomer = new HashMap<>();
+        titleIndex = new int[10];
+        detailIndex = new int[7];
+    }
+
+    public HashMap<String, ArrayList<String>> getCustomerAndPo() {
+        return customerAndPo;
+    }
 
     public int getCount() {
         return count;
     }
 
+    /*
+    Fill in the titleIndex and detailIndex arrays to know the indices of each column to use.
+     */
+    public static void findIndexOfColumns(Workbook wb) {
+        Sheet sheet = wb.getSheet(0);
+        Cell[] firstRow = sheet.getRow(0);
+        boolean paymentTerm = true;
+        boolean salesRep = true;
+        boolean soldTo = true;
+        boolean shipTo = true;
+        boolean material = true;
+        for (int index = 0; index < firstRow.length; index++) {
+            Cell currentCell = firstRow[index];
+            String columnName = currentCell.getContents();
+            for (int i = 0; i < titleName.length; i++) {
+                String title = titleName[i];
+                if (title.equals(columnName)) {
+                    if (title.equals("Payment terms")) {
+                        if (paymentTerm) {
+                            paymentTerm = false;
+                            titleIndex[i] = index;
+                            break;
+                        }
+                    } else if (title.equals("Sales Rep(Doc)")) {
+                        if (salesRep) {
+                            salesRep = false;
+                            titleIndex[i] = index;
+                            break;
+                        }
+                    } else if (title.equals("Ship-to")) {
+                        if (shipTo) {
+                            shipTo = false;
+                            titleIndex[i] = index;
+                            break;
+                        }
+                    } else if (title.equals("Sold-to")) {
+                        if (soldTo) {
+                            soldTo = false;
+                            titleIndex[i] = index;
+                            break;
+                        }
+                    } else {
+                        titleIndex[i] = index;
+                        break;
+                    }
+                }
+            }
+            for (int i = 0; i < detailName.length; i++) {
+                String detail = detailName[i];
+                if (detail.equals(columnName)) {
+                    if (detail.equals("Material") && material) {
+                        material = false;
+                        detailIndex[i] = index;
+                        break;
+                    } else if (detail.equals("Material")) {
+                        detailIndex[i+2] = index;
+                        break;
+                    }
+                    detailIndex[i] = index;
+                    break;
+                }
+            }
+        }
+    }
+
+    /*
+    Iterate each row from data excel file and store index of rows according to po numbers
+    into hashmap<String, ArrayList<Integer>>
+    Key: po number, Value: String of row numbers
+    indexOfRows: integer in ArrayList
+
+    Put PO number and date of PO into hashmap<String, String>
+    Key: PO number, Value: PO date
+    */
+    public static void storeDataInHashMap(Workbook wb) {
+        Sheet sheet = wb.getSheet(0);
+        for (int row = 1; row < sheet.getRows(); row++) {
+            String po = sheet.getRow(row)[titleIndex[3]].getContents(); //Order PO Detail is the index of 3 in the
+            // titleName
+            // array
+            if (poAndRows.containsKey(po)) {
+                ArrayList<Integer> temp = poAndRows.get(po);
+                temp.add(row);
+            } else {
+                ArrayList<Integer> temp = new ArrayList();
+                temp.add(row);
+                poAndRows.put(po, temp);
+            }
+            String date = sheet.getRow(row)[titleIndex[8]].getContents(); //Billing Date is the index of 8 in the
+            // titleName
+            date = date.replaceAll("/", ".");
+            if (!poAndDate.containsKey(po)) {
+                poAndDate.put(po, date);
+            }
+
+            String customer = sheet.getRow(row)[titleIndex[1]].getContents(); //Sold-to is the index of 1 in the
+            // titleName
+            if (!poAndCustomer.containsKey(po)) {
+                poAndCustomer.put(po, customer);
+            }
+        }
+    }
+
+    /*
+    Update count of txt files
+     */
     public void updateCount() {
         File fileToBeModified = new File(pathSave + "\\" + "countInvoices.txt");
         String oldContent = "";
@@ -74,14 +203,6 @@ public class CreateInvoice {
         }
     }
 
-    public CreateInvoice(String pathData, String pathSave, String id, String pw) {
-        this.pathData = pathData;
-        this.pathSave = pathSave;
-        poAndRows = new HashMap<>();
-        poAndDate = new HashMap<>();
-        email = new OutlookEmail(id,pw, null);
-    }
-
     public static void createDateFolder(String dateInvoice) {
         File f = new File(dateInvoice);
         if (!f.exists()) {
@@ -89,12 +210,16 @@ public class CreateInvoice {
         }
     }
 
-    public void generateInvoice(JTextArea textArea) throws IOException, BiffException, XmlException {
+    public void generateInvoice(JTextArea textArea) throws IOException, BiffException, XmlException, ParseException {
         //Store po number, email, file path, file name in ArrayList
         ArrayList<String> poList = new ArrayList<>();
         ArrayList<String> emailList = new ArrayList<>();
         ArrayList<String> pathFileList = new ArrayList<>();
         ArrayList<String> fileNameList = new ArrayList<>();
+        ArrayList<String> customerList = new ArrayList<>();
+        ArrayList<String> invoiceList = new ArrayList<>();
+        ArrayList<String> nameList = new ArrayList<>();
+        ArrayList<String> dateList = new ArrayList<>();
 
         WorkbookSettings workbookSettings = new WorkbookSettings();
         workbookSettings.setEncoding("Cp1252"); //Recognize special character
@@ -105,6 +230,7 @@ public class CreateInvoice {
         } catch (Exception e) {
             textArea.append("Please select the data file.\n");
         }
+        findIndexOfColumns(data);
         storeDataInHashMap(data);
 
         for (Map.Entry<String, ArrayList<Integer>> entry : poAndRows.entrySet()) {
@@ -112,12 +238,43 @@ public class CreateInvoice {
                 continue;
             String po = entry.getKey();
             Sheet sheet = data.getSheet(0);
-            String date = poAndDate.get(po);
-            if (date.equals("")) {
-                date = "No date";
+//            String date = poAndDate.get(po);
+//            if (date.equals("")) {
+//                date = "No date";
+//            }
+
+            //returns  array of row indices
+            ArrayList<Integer> intWithSamePo = entry.getValue();
+
+
+
+            //Take the first row to find information
+            Cell[] firstRow = sheet.getRow(intWithSamePo.get(0));
+
+            //Check name if not equal pass
+            String employeeName = firstRow[titleIndex[9]].getContents();
+            if (!employeeName.equals(name)) {
+                continue;
             }
-            createDateFolder(pathSave + "\\" + date);
-            String pathNewDoc = pathSave + "\\" + date + "\\" + po + ".docx";
+
+            String invoiceNum = firstRow[titleIndex[0]].getContents();
+            String companyName = firstRow[titleIndex[1]].getContents();
+            String companyAddress = "Not Found";
+            String contactPerson = firstRow[titleIndex[2]].getContents();
+
+            String poNumber = firstRow[titleIndex[3]].getContents();
+            String paymentTerm = firstRow[titleIndex[4]].getContents();
+            String salesRep = firstRow[titleIndex[5]].getContents();
+            String trackingNumber = firstRow[titleIndex[6]].getContents();
+            String shipVia = firstRow[titleIndex[7]].getContents();
+            String shippingDate = firstRow[titleIndex[8]].getContents().replace("/", "_");
+
+            //Name the word file
+            String customer = poAndCustomer.get(po);
+            createDateFolder(pathSave + "\\" + customer);
+            String fileName = invoiceNum + "-" + poNumber + "-" + shippingDate;
+            String pathNewDoc = pathSave + "\\" + customer + "\\" + fileName +
+                    ".docx";
             File checkFileExist = new File(pathNewDoc);
             if (checkFileExist.exists()) {
                 continue;
@@ -129,54 +286,58 @@ public class CreateInvoice {
             XWPFDocument newDoc = new XWPFDocument(new FileInputStream(pathNewDoc));
             XWPFTable table = newDoc.getTableArray(3);
 
-            //returns  array of row indices
-            ArrayList<Integer> intWithSamePo = entry.getValue();
+            String[] termArr = paymentTerm.split(" ");
+            int lenArr = termArr.length;
+//            System.out.println(lenArr);
+//            System.out.println(termArr[lenArr-2]);
+            int days = Integer.parseInt(termArr[lenArr-2]);
+            Date due = new SimpleDateFormat("MM_dd_yyyy").parse(shippingDate);
+            SimpleDateFormat format = new SimpleDateFormat("MM_dd_yyyy");
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(due);
+            calendar.add(Calendar.DATE, days);
+            String dueDate = format.format(calendar.getTime()); //take number of days
 
-            //Take the first row to find information
-            Cell[] firstRow = sheet.getRow(intWithSamePo.get(0) - 1);
-            String invoiceNum = "";
-            String companyName = firstRow[1].getContents();
-            String companyAddress = "";
-            String contactPerson = firstRow[18].getContents();
-
-            String poNumber = firstRow[8].getContents();
-            String paymentTerm = firstRow[13].getContents();
-            String salesRep = firstRow[11].getContents();
-            String trackingNumber = "";
-            String shipVia = firstRow[15].getContents();
-            String shippingDate = "";
-            String dueDate = "";
-
-            String cur = firstRow[12].getContents();
+            String cur = firstRow[detailIndex[6]].getContents();
 
             String email = "";
-            String pathPDF = pathSave + "\\" + date + "\\" + po + ".pdf";
+            String pathPDF = pathSave + "\\" + customer + "\\" + fileName +
+                    ".pdf";
 
             //Console output
             textArea.append("Created " + pathPDF + "\n");
             poList.add(poNumber);
             emailList.add(email);
             pathFileList.add(pathPDF);
-            fileNameList.add(po + ".pdf");
+            fileNameList.add(fileName + ".pdf");
+            customerList.add(customer);
+            invoiceList.add(invoiceNum);
+            nameList.add(employeeName);
+
+            //Cleaning date into format of MM_YYYY
+            String monthYear = shippingDate.split("_")[0] + '_' + shippingDate.split("_")[2];
+            dateList.add(monthYear);
 
 
-            int countTable = 0; //Find 4 in order to add detail in table.
+            int countTable = 0; //Find 4 in order to add item information in table.
             double totalAmount = 0;
             for (XWPFTable tableDoc : newDoc.getTables()) {
                 if (countTable == 4) {
                     XWPFTableRow oldRow = tableDoc.getRow(1); //The first empty row to copy
                     for (int i = 0; i < intWithSamePo.size(); i++) {
                         int rowNum = intWithSamePo.get(i);
-                        Cell[] rowData = sheet.getRow(rowNum - 1);
+                        Cell[] rowData = sheet.getRow(rowNum);
                         String[] items = new String[7];
-                        for (int j = 0; j < colIndex.length; j++) {
-                            int index = colIndex[j];
-                            if (index == 6 || index == 7) {
+                        for (int j = 0; j < detailIndex.length; j++) {
+                            int index = detailIndex[j];
+                            if (j == 4 || j == 5) {
                                 items[j] = rowData[index].getContents().replaceAll(",", "");
-                                if (index == 7) {
+                                if (j == 5) {
                                     totalAmount += Double.parseDouble(items[j]);
                                 }
-                            }  else {
+                            } else if (j == 0) { //Remove decimal for quantity
+                                items[j] = rowData[index].getContents().replaceAll("\\.0*$", "");
+                            } else {
                                 items[j] = rowData[index].getContents();
                             }
                         }
@@ -197,7 +358,7 @@ public class CreateInvoice {
                             for (XWPFRun run : paraDoc.getRuns()) {
                                 String str = run.getText(0);
                                 if (str != null && str.equals("InvoiceNum")) {
-                                    run.setText("invoice number", 0);
+                                    run.setText(invoiceNum, 0);
                                 } else if (str != null && str.equals("Name")) {
                                     run.setText(companyName, 0);
                                 }  else if (str != null && str.equals("ContactPerson")) {
@@ -245,36 +406,10 @@ public class CreateInvoice {
             }
         }
         TrackInvoice trackInvoice = new TrackInvoice();
-        trackInvoice.recordInvoice(pathSave, poList, emailList, pathFileList, fileNameList);
+        trackInvoice.recordInvoice(pathSave, poList, emailList, pathFileList, fileNameList, customerList, invoiceList
+                , nameList, dateList);
 
         //System.exit(1);
     }
 
-    /*
-    Iterate each row from data excel file and store index of rows according to po numbers
-    into hashmap<String, ArrayList<Integer>>
-    Key: po number, Value: String of row numbers
-    indexOfRows: integer in ArrayList
-
-    Put PO number and date of PO into hashmap<String, String>
-    Key: PO number, Value: PO date
-    */
-    public static void storeDataInHashMap(Workbook wb) {
-        Sheet sheet = wb.getSheet(0);
-        for (int row = 1; row < sheet.getRows(); row++) {
-            String po = sheet.getCell("I" + row).getContents(); //Order PO Detail on column I
-            if (poAndRows.containsKey(po)) {
-                ArrayList<Integer> temp = poAndRows.get(po);
-                temp.add(row);
-            } else {
-                ArrayList<Integer> temp = new ArrayList();
-                temp.add(row);
-                poAndRows.put(po, temp);
-            }
-            String date = sheet.getCell("J" + row).getContents(); //PO Date on column J
-            if (!poAndDate.containsKey(po)) {
-                poAndDate.put(po, date);
-            }
-        }
-    }
 }

@@ -5,11 +5,13 @@ import sun.management.snmp.jvminstr.JvmThreadInstanceEntryImpl;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileSystemView;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.text.ParseException;
 
 public class Gui {
 
@@ -24,8 +26,9 @@ public class Gui {
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         //Subject
-        final JTextArea subject =new JTextArea("Subject");
-        JScrollPane scrollSubject = new JScrollPane(subject);
+        final JTextArea cc =new JTextArea("Type emails that you want to cc with \"; \" in between. (aa@gmail.com; " +
+                "bb@gmail.com)");
+        JScrollPane scrollSubject = new JScrollPane(cc);
         scrollSubject.setBounds(400,20, 550,20);
         f.getContentPane().add(scrollSubject);
         f.setLayout(null);
@@ -72,17 +75,26 @@ public class Gui {
         });
         f.add(loginButton);
 
+        //Name of employee on SAP
+        final JTextField name = new JTextField("Name");
+        name.setBounds(20, 90, 340, 20);
+        f.add(name);
+
+        JLabel nameText = new JLabel("Type your name on SAP");
+        nameText.setBounds(20, 70, 250, 20);
+        f.add(nameText);
+
         //Data file browser
         final JTextField dataFile = new JTextField("No file selected");
-        dataFile.setBounds(20, 110, 340, 20);
+        dataFile.setBounds(20, 160, 340, 20);
         f.add(dataFile);
 
         JLabel dataFileText = new JLabel("Select the data file");
-        dataFileText.setBounds(20, 80, 250, 20);
+        dataFileText.setBounds(20, 130, 250, 20);
         f.add(dataFileText);
 
         JButton browseDataFile = new JButton("browse");
-        browseDataFile.setBounds(260, 80, 100, 20);
+        browseDataFile.setBounds(260, 130, 100, 20);
         browseDataFile.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -106,15 +118,15 @@ public class Gui {
 
         //Directory browser
         final JTextField directory = new JTextField("No file selected");
-        directory.setBounds(20, 180, 340, 20);
+        directory.setBounds(20, 230, 340, 20);
         f.add(directory);
 
         JLabel directoryText = new JLabel("Select the directory you want to save");
-        directoryText.setBounds(20, 150, 250, 20);
+        directoryText.setBounds(20, 200, 250, 20);
         f.add(directoryText);
 
         JButton browseDirectory = new JButton("browse");
-        browseDirectory.setBounds(260, 150, 100, 20);
+        browseDirectory.setBounds(260, 200, 100, 20);
         browseDirectory.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -140,17 +152,18 @@ public class Gui {
         // ------------------------------------------------------------------
 
         JButton buttonCreateInvoices=new JButton("Create invoices in word and pdf file");//creating instance of JButton
-        buttonCreateInvoices.setBounds(20,210,340, 40);//x axis, y axis, width, height
+        buttonCreateInvoices.setBounds(20,260,340, 40);//x axis, y axis, width, height
         buttonCreateInvoices.addActionListener(new ActionListener(){
             public void actionPerformed(ActionEvent e){
                 String strId = textId.getText();
                 String strPassword = String.valueOf(textPassword.getPassword());
                 String dataPath = dataFile.getText();
                 String savePath = directory.getText();
-                String strSubject = subject.getText();
+                String strCc = cc.getText();
                 String strBodyMessage = message.getText();
+                String strName = name.getText();
                 try {
-                    runProgram(dataPath, savePath, strId, strPassword, strSubject, strBodyMessage);
+                    runProgram(dataPath, savePath, strId, strPassword, strCc, strBodyMessage, strName);
                 } catch (BiffException biffException) {
                     biffException.printStackTrace();
                 } catch (IOException ioException) {
@@ -159,14 +172,20 @@ public class Gui {
                     writeException.printStackTrace();
                 } catch (XmlException xmlException) {
                     xmlException.printStackTrace();
+                } catch (ParseException parseException) {
+                    parseException.printStackTrace();
                 }
             }
 
-            public void runProgram(String dataPath, String savePath, String id, String pw, String subject, String message) throws BiffException, IOException, WriteException, XmlException {
+            public void runProgram(String dataPath, String savePath, String id, String pw, String subject,
+                                   String message, String name) throws BiffException, IOException, WriteException,
+                    XmlException, ParseException {
                 long start = System.currentTimeMillis();
 
                 //Create invoices
-                createInvoice = new CreateInvoice(dataPath, savePath, id, pw);
+                createInvoice = new CreateInvoice(dataPath, savePath, name);
+                //createInvoice = new CreateInvoice("C:\\Users\\Keeyou\\IdeaProjects\\NavienInvoiceProgram\\small" +
+                //        "-billing-status.xls", "C:\\Users\\Keeyou\\Downloads\\sample", id, pw);
                 createInvoice.generateInvoice(consoleOutput);
 
                 //Result
@@ -182,14 +201,14 @@ public class Gui {
         f.add(buttonCreateInvoices);//create and send invoice button
 
         JButton buttonSendEmails=new JButton("Send emails to buyers");//creating instance of JButton
-        buttonSendEmails.setBounds(20,260,340, 40);//x axis, y axis, width, height
+        buttonSendEmails.setBounds(20,310,340, 40);//x axis, y axis, width, height
         buttonSendEmails.addActionListener(new ActionListener(){
             public void actionPerformed(ActionEvent e){
                 String strId = textId.getText();
                 String strPassword = String.valueOf(textPassword.getPassword());
                 String dataPath = dataFile.getText();
                 String savePath = directory.getText();
-                String strSubject = subject.getText();
+                String strSubject = cc.getText();
                 String strBodyMessage = message.getText();
                 try {
                     runProgram(dataPath, savePath, strId, strPassword, strSubject, strBodyMessage);
@@ -228,7 +247,7 @@ public class Gui {
         f.add(buttonSendEmails);//create and send invoice button
 
         JButton buttonCheckStatus=new JButton("Check status of invoices and emails");//creating instance of JButton
-        buttonCheckStatus.setBounds(20,310,340, 40);//x axis, y axis, width, height
+        buttonCheckStatus.setBounds(20,360,340, 40);//x axis, y axis, width, height
         buttonCheckStatus.addActionListener(new ActionListener(){
             public void actionPerformed(ActionEvent e){
                 try {
